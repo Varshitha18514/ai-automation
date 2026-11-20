@@ -1,0 +1,31 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python virtual environments
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+# Local vector database and generated data
+qdrant_storage/
+document_embeddings.json
+usage_log.jsonl
+day16_output.txt
+day21_evaluation_report.json
+requirements-locl.txt

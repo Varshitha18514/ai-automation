@@ -1,0 +1,19 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.15.0+cpu
+fastapi
+uvicorn[standard]
+requests
+google-genai
+openai
+pydantic
+python-dotenv
+sqlalchemy
+slowapi
+rank-bm25
+qdrant-client
+numpy
+sentence-transformers
+pypdf
+langchain-core
+langchain-text-splitters
+psycopg2-binary
