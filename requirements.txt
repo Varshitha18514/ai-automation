@@ -17,3 +17,4 @@ pypdf
 langchain-core
 langchain-text-splitters
 psycopg2-binary
+pytest
