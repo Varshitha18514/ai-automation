@@ -16,6 +16,8 @@ from conversation_summarizer import (
     get_conversation_summary,
 )
 
+from telemetry import tracer
+
 
 # Load environment variables
 load_dotenv()
@@ -29,87 +31,75 @@ gemini = genai.Client(api_key=api_key)
 
 
 def generate_answer(question: str, session_id: str):
-    """Generate an answer using RAG and conversational memory."""
+    """Generate an answer using RAG, memory, and telemetry tracing."""
 
-    print("\nStep 1: Loading conversation memory...")
+    # Step 1: Load conversation memory
+    with tracer.start_as_current_span("load_conversation_memory"):
+        history = get_recent_messages(
+            session_id,
+            limit=10,
+        )
 
-    # Retrieve previous conversation messages
-    history = get_recent_messages(
-        session_id,
-        limit=10,
-    )
+        summary = get_conversation_summary(session_id)
 
-    # Retrieve the saved conversation summary
-    summary = get_conversation_summary(session_id)
+        save_message(
+            session_id,
+            "user",
+            question,
+        )
 
-    # Save the current user question
-    save_message(
-        session_id,
-        "user",
-        question,
-    )
+        history_text = "\n".join(
+            f"{message['role']}: {message['content']}"
+            for message in history
+        )
 
-    # Format conversation history
-    history_text = "\n".join(
-        f"{message['role']}: {message['content']}"
-        for message in history
-    )
-
-    print("Conversation memory loaded.")
-
-    print("\nStep 2: Running hybrid search...")
-
-    search_results = hybrid_search(
-        question,
-        limit=5,
-    )
+    # Step 2: Run hybrid search
+    with tracer.start_as_current_span("hybrid_search"):
+        search_results = hybrid_search(
+            question,
+            limit=5,
+        )
 
     if not search_results:
         answer = "I couldn't find relevant information in the documents."
-
         save_message(session_id, "assistant", answer)
-
         return answer
 
-    print("\nStep 3: Re-ranking search results...")
-
-    reranked_results = rerank_results(
-        question,
-        search_results,
-        limit=3,
-    )
+    # Step 3: Re-rank search results
+    with tracer.start_as_current_span("rerank_results"):
+        reranked_results = rerank_results(
+            question,
+            search_results,
+            limit=3,
+        )
 
     if not reranked_results:
         answer = "I couldn't find relevant information in the documents."
-
         save_message(session_id, "assistant", answer)
-
         return answer
 
-    print("\nStep 4: Preparing document context...")
+    # Step 4: Prepare document context
+    with tracer.start_as_current_span("prepare_document_context"):
+        context_text = "\n\n".join(
+            item["content"]
+            for item in reranked_results
+        )
 
-    context_text = "\n\n".join(
-        item["content"]
-        for item in reranked_results
-    )
+        memory_context = ""
 
-    # Prepare memory context
-    memory_context = ""
-
-    if summary:
-        memory_context += f"""
+        if summary:
+            memory_context += f"""
 PREVIOUS CONVERSATION SUMMARY:
 {summary}
 """
 
-    if history_text:
-        memory_context += f"""
+        if history_text:
+            memory_context += f"""
 RECENT CONVERSATION HISTORY:
 {history_text}
 """
 
-    # Build final prompt
-    prompt = f"""
+        prompt = f"""
 You are a helpful AI assistant with conversational memory.
 
 Use the provided document context and conversation memory
@@ -135,21 +125,25 @@ CURRENT USER QUESTION:
 Provide a clear and easy-to-understand answer.
 """
 
-    print("\nStep 5: Generating answer with Gemini...")
+    # Step 5: Generate answer with Gemini
+    with tracer.start_as_current_span("gemini_generate_answer") as span:
+        response = gemini.models.generate_content(
+            model="gemini-3.5-flash-lite",
+            contents=prompt,
+        )
 
-    response = gemini.models.generate_content(
-        model="gemini-3.5-flash-lite",
-        contents=prompt,
-    )
+        answer = response.text
 
-    answer = response.text
+        # Record model name without recording prompt or response content
+        span.set_attribute("llm.model", "gemini-3.5-flash-lite")
 
-    # Save assistant response to conversation memory
-    save_message(
-        session_id,
-        "assistant",
-        answer,
-    )
+    # Step 6: Save assistant response
+    with tracer.start_as_current_span("save_assistant_response"):
+        save_message(
+            session_id,
+            "assistant",
+            answer,
+        )
 
     return answer
 
