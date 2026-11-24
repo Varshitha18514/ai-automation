@@ -3,9 +3,7 @@ import uuid
 import requests
 import streamlit as st
 
-
 API_URL = "http://127.0.0.1:8000/chat/stream"
-
 
 st.set_page_config(
     page_title="AI Knowledge Assistant",
@@ -16,11 +14,11 @@ st.set_page_config(
 st.title("🤖 AI Knowledge Assistant")
 st.caption("Ask questions about your documents using RAG.")
 
-
 # Sidebar settings
 with st.sidebar:
     st.header("Settings")
 
+    # Create a session ID if one does not exist
     if "session_id" not in st.session_state:
         st.session_state.session_id = str(uuid.uuid4())
 
@@ -32,8 +30,10 @@ with st.sidebar:
 
     st.write("Powered by Gemini + Qdrant + Hybrid Search")
 
+    # Clear chat and create a fresh session
     if st.button("Clear Chat"):
         st.session_state.messages = []
+        st.session_state.session_id = str(uuid.uuid4())
         st.rerun()
 
 
@@ -51,9 +51,7 @@ for message in st.session_state.messages:
 # Chat input
 question = st.chat_input("Ask something about your documents...")
 
-
 if question:
-
     st.session_state.messages.append({
         "role": "user",
         "content": question,
@@ -63,12 +61,10 @@ if question:
         st.markdown(question)
 
     with st.chat_message("assistant"):
-
         response_placeholder = st.empty()
         full_response = ""
 
         try:
-            # Get API key from environment
             import os
             from dotenv import load_dotenv
 
@@ -79,7 +75,6 @@ if question:
             if not api_key:
                 raise ValueError("API_SECRET_KEY is missing from .env")
 
-            # Connect to streaming API
             with requests.post(
                 API_URL,
                 json={
@@ -95,12 +90,10 @@ if question:
 
                 response.raise_for_status()
 
-                # Display chunks as they arrive
                 for chunk in response.iter_content(
                     chunk_size=None,
                     decode_unicode=True,
                 ):
-
                     if chunk:
                         if isinstance(chunk, bytes):
                             chunk = chunk.decode("utf-8")
